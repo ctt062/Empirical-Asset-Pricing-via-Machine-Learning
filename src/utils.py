@@ -591,6 +591,8 @@ def create_performance_table(returns_dict: Dict[str, pd.Series],
         n_years = len(returns) / 12
         annualized_return = (cumulative ** (1 / n_years) - 1) if n_years > 0 else 0
         
+        from scipy import stats as scipy_stats
+        
         stats.append({
             'Strategy': name,
             'Mean Return (%)': returns.mean() * 100,
@@ -599,8 +601,8 @@ def create_performance_table(returns_dict: Dict[str, pd.Series],
             'Ann. Return (%)': annualized_return * 100,
             'Total Return (%)': total_return * 100,
             'Max Drawdown (%)': calculate_max_drawdown((1 + returns).cumprod().values) * 100,
-            'Skewness': stats.skew(returns),
-            'Kurtosis': stats.kurtosis(returns),
+            'Skewness': scipy_stats.skew(returns.values),
+            'Kurtosis': scipy_stats.kurtosis(returns.values),
             'N Months': len(returns)
         })
     

@@ -20,8 +20,11 @@ import sys
 import time
 from pathlib import Path
 
-# Add src to path
-sys.path.append(str(Path(__file__).parent / "src"))
+# Add src to path at the beginning to prioritize our utils
+src_path = str(Path(__file__).parent / "src")
+if src_path not in sys.path:
+    sys.path.insert(0, src_path)
+
 from utils import setup_logging
 
 logger = setup_logging()

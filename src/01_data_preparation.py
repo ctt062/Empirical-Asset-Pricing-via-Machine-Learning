@@ -92,8 +92,11 @@ def parse_dates(df: pd.DataFrame, date_col: str = 'DATE') -> pd.DataFrame:
     """
     logger.info("Parsing dates")
     
-    # Convert YYYYMM to datetime
-    df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m')
+    # Convert YYYYMMDD to datetime
+    df['date'] = pd.to_datetime(df[date_col].astype(str), format='%Y%m%d')
+    
+    # Convert to month-end dates for consistency
+    df['date'] = df['date'].dt.to_period('M').dt.to_timestamp('M')
     
     # Drop original date column
     df = df.drop(columns=[date_col])

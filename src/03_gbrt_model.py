@@ -243,6 +243,17 @@ def train_gbrt_expanding_window(train_df: pd.DataFrame, test_df: pd.DataFrame,
         train_split = train_window[~val_mask].copy()
         val_split = train_window[val_mask].copy()
         
+        # Skip if validation set is too small
+        if len(val_split) < 100 or len(train_split) < 100:
+            # Fall back to simple 80/20 split
+            train_size = int(0.8 * len(train_window))
+            train_split = train_window.iloc[:train_size].copy()
+            val_split = train_window.iloc[train_size:].copy()
+            
+            # If still too small, skip this month
+            if len(val_split) < 100 or len(train_split) < 100:
+                continue
+        
         # Prepare data
         X_train = train_split[feature_cols].values
         y_train = train_split[target_col].values
