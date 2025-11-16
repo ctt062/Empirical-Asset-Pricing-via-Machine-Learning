@@ -67,3 +67,4 @@ Thumbs.db
 *.temp
 temp/
 tmp/
+data/datashare_with_returns.csv

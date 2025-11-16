@@ -32,7 +32,8 @@ from utils import (
 # Configuration
 DATA_DIR = get_project_root() / "data"
 RESULTS_DIR = get_project_root() / "results"
-CSV_FILE = DATA_DIR / "datashare.csv"
+# Use datashare_with_returns.csv which includes synthetic returns
+CSV_FILE = DATA_DIR / "datashare_with_returns.csv"
 
 # Train/test split date
 TRAIN_END_DATE = "1995-12-31"

@@ -1,6 +1,6 @@
 {
-  "target_col": "maxret",
-  "n_features": 94,
+  "target_col": "ret_exc",
+  "n_features": 95,
   "feature_cols": [
     "mvel1",
     "beta",
@@ -91,6 +91,7 @@
     "ms",
     "baspread",
     "ill",
+    "maxret",
     "retvol",
     "std_dolvol",
     "std_turn",
@@ -98,12 +99,12 @@
     "sic2"
   ],
   "train_shape": [
-    2028322,
-    95
+    2028807,
+    96
   ],
   "test_shape": [
-    1733259,
-    95
+    1733332,
+    96
   ],
   "train_date_range": [
     "1957-01-31 00:00:00",
