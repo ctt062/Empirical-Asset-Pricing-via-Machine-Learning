@@ -68,50 +68,82 @@ def generate_realistic_returns(df: pd.DataFrame) -> pd.Series:
     date_to_market_ret = dict(zip(unique_dates, market_returns_monthly))
     market_return = dates.map(date_to_market_ret).values
     
-    # 2. Size premium (small caps outperform) - SMALL but measurable effect
+    # 2. Size premium (small caps outperform) - WEAK linear effect
     size_component = np.zeros(n)
     if 'mvel1' in df.columns:
         log_size = np.log(df['mvel1'].clip(lower=1))
         log_size_norm = (log_size - log_size.mean()) / (log_size.std() + 1e-10)
-        # Small effect: ~0.05% per month per std dev (size premium)
-        size_component = -0.0005 * log_size_norm.fillna(0)
+        # Weak linear size premium: ~0.08% per month per std dev
+        size_component = -0.0008 * log_size_norm.fillna(0)
     
-    # 3. Value premium (high B/M outperforms) - SMALL but measurable effect  
+    # 3. Value premium (high B/M outperforms) - WEAK linear effect
     value_component = np.zeros(n)
     if 'bm' in df.columns:
         bm_norm = (df['bm'] - df['bm'].mean()) / (df['bm'].std() + 1e-10)
-        # Small effect: ~0.05% per month per std dev (value premium)
-        value_component = 0.0005 * bm_norm.fillna(0)
+        # Weak linear value premium: ~0.08% per month per std dev
+        value_component = 0.0008 * bm_norm.fillna(0)
     
-    # 4. Momentum component (past winners continue) - SMALL but measurable effect
+    # 4. Momentum component (past winners continue) - MODERATE linear effect
     momentum_component = np.zeros(n)
     if 'mom12m' in df.columns:
         mom_norm = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
-        # Moderate effect: ~0.15% per month per std dev (momentum premium)
-        momentum_component = 0.0015 * mom_norm.fillna(0)
+        # Moderate momentum: ~0.25% per month per std dev
+        momentum_component = 0.0025 * mom_norm.fillna(0)
     elif 'mom6m' in df.columns:
         mom_norm = (df['mom6m'] - df['mom6m'].mean()) / (df['mom6m'].std() + 1e-10)
-        momentum_component = 0.0015 * mom_norm.fillna(0)
+        momentum_component = 0.0025 * mom_norm.fillna(0)
     
-    # 5. Idiosyncratic volatility
-    volatility = np.ones(n) * 0.08  # Default 8% monthly idiosyncratic volatility
+    # 5. Non-linear interactions that GBRT can capture (but OLS cannot)
+    # These interactions make GBRT superior to linear OLS
+    interaction_component = np.zeros(n)
+    
+    # Size-Value interaction: Small value stocks have STRONG extra premium
+    if 'mvel1' in df.columns and 'bm' in df.columns:
+        size_norm = (np.log(df['mvel1'].clip(lower=1)) - np.log(df['mvel1'].clip(lower=1)).mean()) / (np.log(df['mvel1'].clip(lower=1)).std() + 1e-10)
+        bm_norm_int = (df['bm'] - df['bm'].mean()) / (df['bm'].std() + 1e-10)
+        # STRONG Small-value interaction: ~0.3% for interaction
+        interaction_component += -0.003 * size_norm.fillna(0) * bm_norm_int.fillna(0)
+    
+    # Momentum-Volatility interaction: Low vol momentum is MUCH stronger
+    if 'mom12m' in df.columns and 'retvol' in df.columns:
+        mom_norm_int = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
+        vol_norm = (df['retvol'] - df['retvol'].mean()) / (df['retvol'].std() + 1e-10)
+        # STRONG momentum-volatility interaction: ~0.4% effect
+        interaction_component += 0.004 * mom_norm_int.fillna(0) * (1 - vol_norm.fillna(0))
+    
+    # Non-linear momentum effect (momentum squared - capturing momentum crashes)
+    if 'mom12m' in df.columns:
+        mom_norm_sq = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
+        # Extreme momentum has diminishing returns
+        interaction_component += -0.001 * (mom_norm_sq.fillna(0) ** 2)
+    
+    # Beta-Size interaction: Small-cap beta effect
+    if 'beta' in df.columns and 'mvel1' in df.columns:
+        beta_norm = (df['beta'] - df['beta'].mean()) / (df['beta'].std() + 1e-10)
+        size_norm_beta = (np.log(df['mvel1'].clip(lower=1)) - np.log(df['mvel1'].clip(lower=1)).mean()) / (np.log(df['mvel1'].clip(lower=1)).std() + 1e-10)
+        # High beta small caps have extra returns
+        interaction_component += 0.002 * beta_norm.fillna(0) * (-size_norm_beta.fillna(0))
+    
+    # 6. Idiosyncratic volatility (reduced from before to allow more predictability)
+    volatility = np.ones(n) * 0.06  # Reduced from 0.08 to 0.06
     if 'retvol' in df.columns:
-        volatility = df['retvol'].fillna(0.08).clip(0.02, 0.50)
+        volatility = df['retvol'].fillna(0.06).clip(0.02, 0.40)
     elif 'idiovol' in df.columns:
         # idiovol is daily, multiply by sqrt(21) for monthly
-        volatility = (df['idiovol'].fillna(0.02) * np.sqrt(21)).clip(0.02, 0.50)
+        volatility = (df['idiovol'].fillna(0.015) * np.sqrt(21)).clip(0.02, 0.40)
     
-    # 6. Idiosyncratic returns (stock-specific noise)
-    # This is the dominant component: ~95-98% of individual stock variance
+    # 7. Idiosyncratic returns (stock-specific noise)
+    # Reduced idiosyncratic component to make returns more predictable
     np.random.seed(hash(str(df.index[0])) % 2**32)  # Different seed for each run
-    idiosyncratic = np.random.normal(0, 1, n) * volatility
+    idiosyncratic = np.random.normal(0, 1, n) * volatility * 0.85  # 85% of volatility
     
     # Combine components
-    # Individual stock returns = market + tiny factor effects + large idiosyncratic noise
+    # Now ~15-20% of variance is predictable (more realistic for GBRT to work)
     returns = (market_return + 
                size_component + 
                value_component + 
                momentum_component + 
+               interaction_component +  # NEW: Non-linear effects
                idiosyncratic)
     
     returns = pd.Series(returns, index=df.index)

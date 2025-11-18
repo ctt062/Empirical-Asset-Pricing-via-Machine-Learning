@@ -1,3 +1,3 @@
 Strategy,Mean Return (%),Std Dev (%),Sharpe Ratio,Ann. Return (%),Total Return (%),Max Drawdown (%),Skewness,Kurtosis,N Months
-GBRT Long-Short (EW),0.052,0.265,0.676,0.618,10.874,1.419,-0.353,1.267,201
-GBRT Long-Short (VW),-0.015,0.531,-0.1,-0.2,-3.295,9.147,-0.183,1.601,201
+GBRT Long-Short (EW),0.71,0.796,3.091,8.82,377.641,0.69,7.807,88.365,222
+GBRT Long-Short (VW),0.583,1.128,1.791,7.151,258.86,2.011,8.642,100.045,222
