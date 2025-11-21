@@ -331,9 +331,10 @@ def calculate_max_drawdown(cumulative_returns: np.ndarray) -> float:
 
 def create_portfolio_sorts(df: pd.DataFrame, prediction_col: str = 'prediction',
                            return_col: str = 'ret_excess', n_portfolios: int = 10,
-                           weight_col: Optional[str] = None) -> pd.DataFrame:
+                           weight_col: Optional[str] = None, 
+                           transaction_cost: float = 0.0005) -> pd.DataFrame:
     """
-    Create portfolio sorts based on predictions.
+    Create portfolio sorts based on predictions with transaction costs.
     
     Parameters
     ----------
@@ -348,6 +349,9 @@ def create_portfolio_sorts(df: pd.DataFrame, prediction_col: str = 'prediction',
     weight_col : str, optional
         Column for value weighting (e.g., 'mvel1' for market cap).
         If None, uses equal weighting.
+    transaction_cost : float
+        One-way transaction cost as decimal (default: 0.05% = 0.0005)
+        Round-trip cost = 2 * transaction_cost
     
     Returns
     -------
@@ -355,6 +359,7 @@ def create_portfolio_sorts(df: pd.DataFrame, prediction_col: str = 'prediction',
         Portfolio returns by date and portfolio number
     """
     results = []
+    prev_portfolios = {}  # Track previous period portfolios for turnover calculation
     
     for date, group in df.groupby('date'):
         # Remove missing predictions or returns
@@ -368,13 +373,21 @@ def create_portfolio_sorts(df: pd.DataFrame, prediction_col: str = 'prediction',
         group['portfolio'] = pd.qcut(group[prediction_col], q=n_portfolios, 
                                       labels=False, duplicates='drop') + 1
         
-        # Calculate portfolio returns
+        # Get stock identifiers (permno or index)
+        if 'permno' in group.columns:
+            stock_id = 'permno'
+        else:
+            stock_id = group.index.name if group.index.name else 'index'
+            group = group.reset_index()
+        
+        # Calculate portfolio returns with transaction costs
         for port in range(1, n_portfolios + 1):
             port_data = group[group['portfolio'] == port]
             
             if len(port_data) == 0:
                 continue
             
+            # Calculate base return
             if weight_col and weight_col in port_data.columns:
                 # Value-weighted
                 weights = port_data[weight_col].fillna(0)
@@ -387,12 +400,36 @@ def create_portfolio_sorts(df: pd.DataFrame, prediction_col: str = 'prediction',
                 # Equal-weighted
                 port_return = port_data[return_col].mean()
             
+            # Calculate turnover and transaction costs
+            current_stocks = set(port_data[stock_id].values)
+            turnover = 0.0
+            
+            if port in prev_portfolios:
+                prev_stocks = prev_portfolios[port]
+                # Turnover = fraction of portfolio that changed
+                n_added = len(current_stocks - prev_stocks)
+                n_removed = len(prev_stocks - current_stocks)
+                turnover = (n_added + n_removed) / (2 * len(current_stocks)) if len(current_stocks) > 0 else 0.0
+            else:
+                # First period: full turnover (building new portfolio)
+                turnover = 1.0
+            
+            # Apply transaction costs (one-way cost * turnover)
+            tc_cost = transaction_cost * turnover
+            port_return_net = port_return - tc_cost
+            
             results.append({
                 'date': date,
                 'portfolio': port,
-                'return': port_return,
+                'return': port_return_net,
+                'return_gross': port_return,
+                'turnover': turnover,
+                'transaction_cost': tc_cost,
                 'n_stocks': len(port_data)
             })
+            
+            # Update previous portfolios
+            prev_portfolios[port] = current_stocks
     
     portfolio_df = pd.DataFrame(results)
     

@@ -37,10 +37,12 @@ from utils import (
     plot_portfolio_performance,
     create_performance_table
 )
-
-# Configuration
-DATA_DIR = get_project_root() / "data"
-RESULTS_DIR = get_project_root() / "results"
+from config import (
+    DATA_DIR,
+    RESULTS_DIR,
+    TRANSACTION_COST,
+    N_PORTFOLIOS
+)
 
 logger = setup_logging()
 
@@ -132,14 +134,15 @@ def evaluate_model(pred_df: pd.DataFrame, test_df: pd.DataFrame,
     
     eval_df = eval_df.reset_index()
     
-    # Equal-weighted portfolios
-    logger.info("\nEqual-weighted portfolio analysis:")
+    # Equal-weighted portfolios (with transaction costs)
+    logger.info(f"\nEqual-weighted portfolio analysis (TC: {TRANSACTION_COST*10000:.1f} bps):")
     portfolios_ew = create_portfolio_sorts(
         eval_df,
         prediction_col='prediction',
         return_col='ret_excess',
-        n_portfolios=10,
-        weight_col=None
+        n_portfolios=N_PORTFOLIOS,
+        weight_col=None,
+        transaction_cost=TRANSACTION_COST
     )
     
     ls_returns_ew = calculate_long_short_returns(portfolios_ew)
@@ -162,15 +165,16 @@ def evaluate_model(pred_df: pd.DataFrame, test_df: pd.DataFrame,
     logger.info(f"  Ann. volatility: {vol_ew:.2f}%")
     logger.info(f"  Max drawdown: {max_dd_ew*100:.2f}%")
     
-    # Value-weighted portfolios
+    # Value-weighted portfolios (with transaction costs)
     if mkt_cap_col:
-        logger.info("\nValue-weighted portfolio analysis:")
+        logger.info(f"\nValue-weighted portfolio analysis (TC: {TRANSACTION_COST*10000:.1f} bps):")
         portfolios_vw = create_portfolio_sorts(
             eval_df,
             prediction_col='prediction',
             return_col='ret_excess',
-            n_portfolios=10,
-            weight_col=mkt_cap_col
+            n_portfolios=N_PORTFOLIOS,
+            weight_col=mkt_cap_col,
+            transaction_cost=TRANSACTION_COST
         )
         
         ls_returns_vw = calculate_long_short_returns(portfolios_vw)
@@ -422,7 +426,7 @@ def main() -> None:
     
     # Create comparison plots
     plot_model_comparison(benchmark_results, gbrt_results, 
-                         RESULTS_DIR / "figures")
+                         RESULTS_DIR / "figures" / "model_comparison")
     
     # Create individual performance tables
     returns_dict_bench = {

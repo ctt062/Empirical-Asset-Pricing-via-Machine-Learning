@@ -395,14 +395,14 @@ def save_benchmark_results(pred_df: pd.DataFrame, results: Dict) -> None:
         plot_cumulative_returns(
             results['ls_returns_ew']['long_short'],
             title='OLS Benchmark: Long-Short Portfolio (Equal-Weighted)',
-            save_path=str(RESULTS_DIR / "figures" / "benchmark_ls_ew.png")
+            save_path=str(RESULTS_DIR / "figures" / "benchmarks" / "benchmark_ls_ew.png")
         )
     
     if 'ls_returns_vw' in results:
         plot_cumulative_returns(
             results['ls_returns_vw']['long_short'],
             title='OLS Benchmark: Long-Short Portfolio (Value-Weighted)',
-            save_path=str(RESULTS_DIR / "figures" / "benchmark_ls_vw.png")
+            save_path=str(RESULTS_DIR / "figures" / "benchmarks" / "benchmark_ls_vw.png")
         )
 
 

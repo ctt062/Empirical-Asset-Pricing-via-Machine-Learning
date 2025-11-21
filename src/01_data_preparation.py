@@ -28,17 +28,16 @@ from utils import (
     print_summary_statistics,
     winsorize_series
 )
+from config import (
+    DATA_DIR,
+    RESULTS_DIR,
+    TRAIN_END_DATE,
+    TEST_START_DATE,
+    TEST_END_DATE
+)
 
-# Configuration
-DATA_DIR = get_project_root() / "data"
-RESULTS_DIR = get_project_root() / "results"
 # Use datashare_with_returns.csv which includes synthetic returns
 CSV_FILE = DATA_DIR / "datashare_with_returns.csv"
-
-# Train/test split date
-TRAIN_END_DATE = "1995-12-31"
-TEST_START_DATE = "1996-01-01"
-TEST_END_DATE = "2016-12-31"
 
 logger = setup_logging()
 

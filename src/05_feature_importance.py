@@ -442,7 +442,7 @@ def main() -> None:
     plot_feature_importance(
         importance_df, 
         top_n=30,
-        save_path=RESULTS_DIR / "figures" / "feature_importance.png"
+        save_path=RESULTS_DIR / "figures" / "feature_analysis" / "feature_importance.png"
     )
     
     # 2. Feature group analysis
@@ -451,7 +451,7 @@ def main() -> None:
     # Plot group importance
     plot_group_importance(
         group_importance,
-        save_path=RESULTS_DIR / "figures" / "feature_group_importance.png"
+        save_path=RESULTS_DIR / "figures" / "feature_analysis" / "feature_group_importance.png"
     )
     
     # 3. SHAP analysis
@@ -473,7 +473,7 @@ def main() -> None:
         # SHAP summary plot
         plot_shap_summary(
             shap_values, X_sample, feature_cols,
-            save_path=RESULTS_DIR / "figures" / "shap_summary.png",
+            save_path=RESULTS_DIR / "figures" / "feature_analysis" / "shap_summary.png",
             max_display=30
         )
         
@@ -481,7 +481,7 @@ def main() -> None:
         top_feature_names = importance_df.head(10)['feature'].tolist()
         plot_shap_dependence(
             shap_values, X_sample, feature_cols, top_feature_names,
-            save_dir=RESULTS_DIR / "figures" / "shap_dependence"
+            save_dir=RESULTS_DIR / "figures" / "feature_analysis" / "shap_dependence"
         )
         
     except Exception as e:
