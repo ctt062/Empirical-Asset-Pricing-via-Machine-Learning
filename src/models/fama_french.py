@@ -62,6 +62,8 @@ class FamaFrenchModel(AssetPricingModel):
             
             # MKT: Equal-weighted market excess return
             mkt = month_data['ret_exc'].mean()
+            if pd.isna(mkt):
+                mkt = 0.0
             
             # Size breakpoint: Median market cap
             size_median = month_data['mvel1'].median()
@@ -72,9 +74,18 @@ class FamaFrenchModel(AssetPricingModel):
             
             # Classify stocks
             month_data['size_group'] = np.where(month_data['mvel1'] <= size_median, 'S', 'B')
-            month_data['bm_group'] = pd.cut(month_data['bm'], 
-                                           bins=[-np.inf, bm_30, bm_70, np.inf],
-                                           labels=['L', 'M', 'H'])
+            
+            # Handle duplicate bin edges by using conditions instead of pd.cut
+            if bm_30 == bm_70:
+                # If all BM values are similar, use median split
+                bm_median = month_data['bm'].median()
+                month_data['bm_group'] = np.where(month_data['bm'] <= bm_median, 'L', 'H')
+            else:
+                # Normal case with three groups
+                month_data['bm_group'] = pd.cut(month_data['bm'], 
+                                               bins=[-np.inf, bm_30, bm_70, np.inf],
+                                               labels=['L', 'M', 'H'],
+                                               duplicates='drop')
             
             # Calculate portfolio returns
             portfolios = month_data.groupby(['size_group', 'bm_group'])['ret_exc'].mean()
@@ -84,16 +95,20 @@ class FamaFrenchModel(AssetPricingModel):
                 small_avg = portfolios.loc['S'].mean()
                 big_avg = portfolios.loc['B'].mean()
                 smb = small_avg - big_avg
+                if pd.isna(smb):
+                    smb = 0.0
             except:
-                smb = 0
+                smb = 0.0
             
             # HML: Average(High B/M) - Average(Low B/M)
             try:
                 high_avg = month_data[month_data['bm_group'] == 'H']['ret_exc'].mean()
                 low_avg = month_data[month_data['bm_group'] == 'L']['ret_exc'].mean()
                 hml = high_avg - low_avg
+                if pd.isna(hml):
+                    hml = 0.0
             except:
-                hml = 0
+                hml = 0.0
             
             factors_list.append({
                 'date': date,
@@ -130,8 +145,14 @@ class FamaFrenchModel(AssetPricingModel):
             return {'beta_MKT': 1.0, 'beta_SMB': 0.0, 'beta_HML': 0.0, 'alpha': 0.0}
         
         # Prepare X (factors) and y (returns)
-        X = merged[['MKT', 'SMB', 'HML']].values
-        y = merged['ret_exc'].values
+        # Drop rows with NaN values
+        merged_clean = merged[['MKT', 'SMB', 'HML', 'ret_exc']].dropna()
+        
+        if len(merged_clean) < 24:  # Need at least 24 months after cleaning
+            return {'beta_MKT': 1.0, 'beta_SMB': 0.0, 'beta_HML': 0.0, 'alpha': 0.0}
+        
+        X = merged_clean[['MKT', 'SMB', 'HML']].values
+        y = merged_clean['ret_exc'].values
         
         # OLS regression
         model = LinearRegression()

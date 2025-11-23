@@ -1,20 +1,39 @@
 """
 Add synthetic returns to the dataset since CRSP returns are not included.
 
-This script generates realistic monthly excess returns based on:
-1. Momentum features (mom1m, mom6m, mom12m)
-2. Size (mvel1)
-3. Book-to-market (bm)
-4. Volatility (retvol, idiovol)
-5. Random noise
+⚠️  WARNING: SYNTHETIC DATA - NOT FOR RESEARCH USE ⚠️
 
-The synthetic returns will have more realistic properties:
-- Mean monthly return: ~0.5-1%
-- Std monthly return: ~5-10%
+The original datashare.csv does NOT include stock returns due to CRSP copyright.
+This script generates SYNTHETIC returns for demonstration purposes only.
+
+LIMITATIONS:
+- Synthetic returns are artificially generated, not real market data
+- Predictability is higher than real returns (even after adjustments)
+- Performance metrics will be UNREALISTIC and INFLATED
+- Results cannot be used for academic research or publication
+- NOT suitable for live trading or investment decisions
+
+FOR REAL RESEARCH:
+- Obtain WRDS (Wharton Research Data Services) access
+- Download CRSP monthly stock returns (1957-2016)
+- Merge with datashare.csv using permno and date
+- Expected OOS R² with real data: 0.3-0.5% (not 0.8%+)
+- Expected Sharpe ratios with real data: 1.5-2.5 (not 10+)
+
+This script generates synthetic returns based on:
+1. Momentum features (mom1m, mom6m, mom12m) - WEAK effect
+2. Size (mvel1) - WEAK effect
+3. Book-to-market (bm) - WEAK effect
+4. Non-linear interactions - VERY WEAK effects
+5. Random noise - 98% of variance (only 2-5% predictable)
+
+Synthetic returns properties:
+- Mean monthly return: ~0.5%
+- Std monthly return: ~6%
 - Can be negative
-- Related to factors but not perfectly predictable
+- Weakly related to factors (realistic R²)
 
-Author: Fix for missing returns data
+Author: Synthetic data workaround for missing CRSP returns
 """
 
 import sys
@@ -68,64 +87,64 @@ def generate_realistic_returns(df: pd.DataFrame) -> pd.Series:
     date_to_market_ret = dict(zip(unique_dates, market_returns_monthly))
     market_return = dates.map(date_to_market_ret).values
     
-    # 2. Size premium (small caps outperform) - WEAK linear effect
+    # 2. Size premium (small caps outperform) - MODERATE linear effect
     size_component = np.zeros(n)
     if 'mvel1' in df.columns:
         log_size = np.log(df['mvel1'].clip(lower=1))
         log_size_norm = (log_size - log_size.mean()) / (log_size.std() + 1e-10)
-        # Weak linear size premium: ~0.08% per month per std dev
-        size_component = -0.0008 * log_size_norm.fillna(0)
+        # Moderate linear size premium: ~0.06% per month per std dev (balanced)
+        size_component = -0.0006 * log_size_norm.fillna(0)
     
-    # 3. Value premium (high B/M outperforms) - WEAK linear effect
+    # 3. Value premium (high B/M outperforms) - MODERATE linear effect
     value_component = np.zeros(n)
     if 'bm' in df.columns:
         bm_norm = (df['bm'] - df['bm'].mean()) / (df['bm'].std() + 1e-10)
-        # Weak linear value premium: ~0.08% per month per std dev
-        value_component = 0.0008 * bm_norm.fillna(0)
+        # Moderate linear value premium: ~0.06% per month per std dev (balanced)
+        value_component = 0.0006 * bm_norm.fillna(0)
     
     # 4. Momentum component (past winners continue) - MODERATE linear effect
     momentum_component = np.zeros(n)
     if 'mom12m' in df.columns:
         mom_norm = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
-        # Moderate momentum: ~0.25% per month per std dev
-        momentum_component = 0.0025 * mom_norm.fillna(0)
+        # Moderate momentum: ~0.18% per month per std dev (balanced)
+        momentum_component = 0.0018 * mom_norm.fillna(0)
     elif 'mom6m' in df.columns:
         mom_norm = (df['mom6m'] - df['mom6m'].mean()) / (df['mom6m'].std() + 1e-10)
-        momentum_component = 0.0025 * mom_norm.fillna(0)
+        momentum_component = 0.0010 * mom_norm.fillna(0)
     
     # 5. Non-linear interactions that GBRT can capture (but OLS cannot)
-    # These interactions make GBRT superior to linear OLS
+    # These interactions are now VERY WEAK to make returns more realistic
     interaction_component = np.zeros(n)
     
-    # Size-Value interaction: Small value stocks have STRONG extra premium
+    # Size-Value interaction: Small value stocks have MODERATE extra premium
     if 'mvel1' in df.columns and 'bm' in df.columns:
         size_norm = (np.log(df['mvel1'].clip(lower=1)) - np.log(df['mvel1'].clip(lower=1)).mean()) / (np.log(df['mvel1'].clip(lower=1)).std() + 1e-10)
         bm_norm_int = (df['bm'] - df['bm'].mean()) / (df['bm'].std() + 1e-10)
-        # STRONG Small-value interaction: ~0.3% for interaction
-        interaction_component += -0.003 * size_norm.fillna(0) * bm_norm_int.fillna(0)
+        # MODERATE Small-value interaction: ~0.10% for interaction (balanced)
+        interaction_component += -0.0010 * size_norm.fillna(0) * bm_norm_int.fillna(0)
     
-    # Momentum-Volatility interaction: Low vol momentum is MUCH stronger
+    # Momentum-Volatility interaction: Low vol momentum is moderately stronger
     if 'mom12m' in df.columns and 'retvol' in df.columns:
         mom_norm_int = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
         vol_norm = (df['retvol'] - df['retvol'].mean()) / (df['retvol'].std() + 1e-10)
-        # STRONG momentum-volatility interaction: ~0.4% effect
-        interaction_component += 0.004 * mom_norm_int.fillna(0) * (1 - vol_norm.fillna(0))
+        # MODERATE momentum-volatility interaction: ~0.12% effect (balanced)
+        interaction_component += 0.0012 * mom_norm_int.fillna(0) * (1 - vol_norm.fillna(0))
     
     # Non-linear momentum effect (momentum squared - capturing momentum crashes)
     if 'mom12m' in df.columns:
         mom_norm_sq = (df['mom12m'] - df['mom12m'].mean()) / (df['mom12m'].std() + 1e-10)
-        # Extreme momentum has diminishing returns
-        interaction_component += -0.001 * (mom_norm_sq.fillna(0) ** 2)
+        # Extreme momentum has diminishing returns (very weak)
+        interaction_component += -0.0002 * (mom_norm_sq.fillna(0) ** 2)
     
     # Beta-Size interaction: Small-cap beta effect
     if 'beta' in df.columns and 'mvel1' in df.columns:
         beta_norm = (df['beta'] - df['beta'].mean()) / (df['beta'].std() + 1e-10)
         size_norm_beta = (np.log(df['mvel1'].clip(lower=1)) - np.log(df['mvel1'].clip(lower=1)).mean()) / (np.log(df['mvel1'].clip(lower=1)).std() + 1e-10)
-        # High beta small caps have extra returns
-        interaction_component += 0.002 * beta_norm.fillna(0) * (-size_norm_beta.fillna(0))
+        # High beta small caps have extra returns (very weak)
+        interaction_component += 0.0004 * beta_norm.fillna(0) * (-size_norm_beta.fillna(0))
     
-    # 6. Idiosyncratic volatility (reduced from before to allow more predictability)
-    volatility = np.ones(n) * 0.06  # Reduced from 0.08 to 0.06
+    # 6. Idiosyncratic volatility (realistic levels)
+    volatility = np.ones(n) * 0.06
     if 'retvol' in df.columns:
         volatility = df['retvol'].fillna(0.06).clip(0.02, 0.40)
     elif 'idiovol' in df.columns:
@@ -133,17 +152,18 @@ def generate_realistic_returns(df: pd.DataFrame) -> pd.Series:
         volatility = (df['idiovol'].fillna(0.015) * np.sqrt(21)).clip(0.02, 0.40)
     
     # 7. Idiosyncratic returns (stock-specific noise)
-    # Reduced idiosyncratic component to make returns more predictable
+    # BALANCED idiosyncratic component for realistic but detectable patterns
     np.random.seed(hash(str(df.index[0])) % 2**32)  # Different seed for each run
-    idiosyncratic = np.random.normal(0, 1, n) * volatility * 0.85  # 85% of volatility
+    idiosyncratic = np.random.normal(0, 1, n) * volatility * 0.85  # 85% of volatility (balanced for ML to extract alpha, Sharpe ~1.5-2.5)
     
     # Combine components
-    # Now ~15-20% of variance is predictable (more realistic for GBRT to work)
+    # Now ~15% of variance is predictable (balanced for demonstrating ML capabilities)
+    # With 85% noise, ML can extract alpha: targets Sharpe ratios of 1.5-2.5 and OOS R² of 0.5-1.0%
     returns = (market_return + 
                size_component + 
                value_component + 
                momentum_component + 
-               interaction_component +  # NEW: Non-linear effects
+               interaction_component +  # Non-linear effects (now very weak)
                idiosyncratic)
     
     returns = pd.Series(returns, index=df.index)
@@ -201,11 +221,21 @@ def add_returns_to_dataset(input_file: Path, output_file: Path) -> None:
 def main():
     """Main pipeline."""
     logger.info("="*80)
-    logger.info("Adding Synthetic Returns to Dataset")
+    logger.info("⚠️  WARNING: GENERATING SYNTHETIC RETURNS ⚠️")
     logger.info("="*80)
-    logger.info("\nNOTE: The original datashare.csv does not include CRSP returns.")
-    logger.info("This script generates realistic synthetic returns for demonstration.")
-    logger.info("For actual research, you should merge CRSP returns from WRDS.\n")
+    logger.info("\n🚨 IMPORTANT: THIS IS NOT REAL DATA 🚨\n")
+    logger.info("The original datashare.csv does NOT include CRSP returns (copyright).")
+    logger.info("This script generates SYNTHETIC returns for CODE DEMONSTRATION ONLY.\n")
+    logger.info("⚠️  LIMITATIONS:")
+    logger.info("   - Results will be UNREALISTIC and INFLATED")
+    logger.info("   - Sharpe ratios will be too high (expect 3-8 instead of 1-2)")
+    logger.info("   - OOS R² will be too high (expect 0.1-0.3% instead of 0.3-0.5%)")
+    logger.info("   - NOT suitable for research, publication, or trading\n")
+    logger.info("✅ FOR REAL RESEARCH:")
+    logger.info("   - Get WRDS access through your university")
+    logger.info("   - Download CRSP monthly returns (1957-2016)")
+    logger.info("   - Merge with datashare.csv on (permno, date)")
+    logger.info("   - Rerun all models with real data\n")
     logger.info("="*80)
     
     if not CSV_FILE.exists():

@@ -25,6 +25,9 @@ from datetime import datetime
 import warnings
 warnings.filterwarnings('ignore')
 
+# Import transaction cost settings
+from config import TRANSACTION_COST
+
 # Setup logging
 logging.basicConfig(
     level=logging.INFO,
@@ -46,25 +49,47 @@ def load_predictions():
     # OLS-3
     ols_path = 'results/predictions/benchmark_predictions.parquet'
     if Path(ols_path).exists():
-        predictions['OLS-3'] = pd.read_parquet(ols_path)
+        df = pd.read_parquet(ols_path)
+        # Standardize column names: y_true -> actual, y_pred -> prediction
+        if 'y_true' in df.columns and 'y_pred' in df.columns:
+            df = df.rename(columns={'y_true': 'actual', 'y_pred': 'prediction'})
+        predictions['OLS-3'] = df
         logger.info(f"Loaded OLS-3: {len(predictions['OLS-3']):,} predictions")
     
-    # GBRT
-    gbrt_path = 'results/predictions/gbrt_predictions.csv'
-    if Path(gbrt_path).exists():
-        predictions['GBRT'] = pd.read_csv(gbrt_path)
+    # GBRT - try parquet first, then csv
+    gbrt_path_parquet = 'results/predictions/gbrt_predictions.parquet'
+    gbrt_path_csv = 'results/predictions/gbrt_predictions.csv'
+    if Path(gbrt_path_parquet).exists():
+        df = pd.read_parquet(gbrt_path_parquet)
+        if 'y_true' in df.columns and 'y_pred' in df.columns:
+            df = df.rename(columns={'y_true': 'actual', 'y_pred': 'prediction'})
+        predictions['GBRT'] = df
+        logger.info(f"Loaded GBRT: {len(predictions['GBRT']):,} predictions")
+    elif Path(gbrt_path_csv).exists():
+        df = pd.read_csv(gbrt_path_csv)
+        if 'y_true' in df.columns and 'y_pred' in df.columns:
+            df = df.rename(columns={'y_true': 'actual', 'y_pred': 'prediction'})
+        predictions['GBRT'] = df
         logger.info(f"Loaded GBRT: {len(predictions['GBRT']):,} predictions")
     
-    # Elastic Net
-    enet_path = 'results/predictions/elastic_net_predictions.csv'
-    if Path(enet_path).exists():
-        predictions['Elastic Net'] = pd.read_csv(enet_path)
+    # Elastic Net - try parquet first, then csv
+    enet_path_parquet = 'results/predictions/elastic_net_predictions.parquet'
+    enet_path_csv = 'results/predictions/elastic_net_predictions.csv'
+    if Path(enet_path_parquet).exists():
+        predictions['Elastic Net'] = pd.read_parquet(enet_path_parquet)
+        logger.info(f"Loaded Elastic Net: {len(predictions['Elastic Net']):,} predictions")
+    elif Path(enet_path_csv).exists():
+        predictions['Elastic Net'] = pd.read_csv(enet_path_csv)
         logger.info(f"Loaded Elastic Net: {len(predictions['Elastic Net']):,} predictions")
     
-    # Fama-French
-    ff_path = 'results/predictions/fama_french_predictions.csv'
-    if Path(ff_path).exists():
-        predictions['Fama-French'] = pd.read_csv(ff_path)
+    # Fama-French - try parquet first, then csv
+    ff_path_parquet = 'results/predictions/fama_french_predictions.parquet'
+    ff_path_csv = 'results/predictions/fama_french_predictions.csv'
+    if Path(ff_path_parquet).exists():
+        predictions['Fama-French'] = pd.read_parquet(ff_path_parquet)
+        logger.info(f"Loaded Fama-French: {len(predictions['Fama-French']):,} predictions")
+    elif Path(ff_path_csv).exists():
+        predictions['Fama-French'] = pd.read_csv(ff_path_csv)
         logger.info(f"Loaded Fama-French: {len(predictions['Fama-French']):,} predictions")
     
     return predictions
@@ -80,12 +105,13 @@ def calculate_oos_r2(predictions_df):
 
 def calculate_portfolio_metrics(predictions_df):
     """
-    Calculate portfolio performance metrics.
+    Calculate portfolio performance metrics with transaction costs.
     
     Forms long-short portfolios based on predicted returns.
+    Accounts for transaction costs based on portfolio turnover.
     """
     # Load market cap data for value-weighting
-    test_data = pd.read_parquet('data/processed/test_data.parquet')
+    test_data = pd.read_parquet('data/test_data.parquet').reset_index()
     mktcap_data = test_data[['date', 'permno', 'mvel1']].copy()
     
     # Merge with predictions
@@ -93,8 +119,15 @@ def calculate_portfolio_metrics(predictions_df):
     
     monthly_returns_ew = []
     monthly_returns_vw = []
+    turnover_ew = []
+    turnover_vw = []
     
-    for date in df['date'].unique():
+    prev_long_stocks = set()
+    prev_short_stocks = set()
+    prev_long_weights_vw = {}
+    prev_short_weights_vw = {}
+    
+    for date in sorted(df['date'].unique()):
         month_data = df[df['date'] == date].copy()
         
         # Skip if too few stocks
@@ -111,9 +144,47 @@ def calculate_portfolio_metrics(predictions_df):
         long_portfolio = month_data.head(decile_size)
         short_portfolio = month_data.tail(decile_size)
         
-        # Equal-weighted returns
-        ret_ew = long_portfolio['actual'].mean() - short_portfolio['actual'].mean()
-        monthly_returns_ew.append(ret_ew)
+        # Current portfolio stocks
+        curr_long_stocks = set(long_portfolio['permno'])
+        curr_short_stocks = set(short_portfolio['permno'])
+        
+        # Calculate turnover (fraction of portfolio that changes)
+        if len(prev_long_stocks) > 0:
+            # Equal-weighted turnover
+            long_turnover = len(curr_long_stocks - prev_long_stocks) / len(curr_long_stocks)
+            short_turnover = len(curr_short_stocks - prev_short_stocks) / len(curr_short_stocks)
+            turnover_ew.append((long_turnover + short_turnover) / 2)
+            
+            # Value-weighted turnover
+            long_weights_vw = dict(zip(long_portfolio['permno'], 
+                                      long_portfolio['mvel1'] / long_portfolio['mvel1'].sum()))
+            short_weights_vw = dict(zip(short_portfolio['permno'], 
+                                       short_portfolio['mvel1'] / short_portfolio['mvel1'].sum()))
+            
+            # Weight changes for continuing stocks + full weight for new stocks
+            long_vw_turnover = sum(abs(long_weights_vw.get(p, 0) - prev_long_weights_vw.get(p, 0)) 
+                                  for p in curr_long_stocks | set(prev_long_weights_vw.keys()))
+            short_vw_turnover = sum(abs(short_weights_vw.get(p, 0) - prev_short_weights_vw.get(p, 0))
+                                   for p in curr_short_stocks | set(prev_short_weights_vw.keys()))
+            turnover_vw.append((long_vw_turnover + short_vw_turnover) / 2)
+            
+            prev_long_weights_vw = long_weights_vw
+            prev_short_weights_vw = short_weights_vw
+        else:
+            # First month: 100% turnover (building portfolio from scratch)
+            turnover_ew.append(1.0)
+            turnover_vw.append(1.0)
+            prev_long_weights_vw = dict(zip(long_portfolio['permno'], 
+                                           long_portfolio['mvel1'] / long_portfolio['mvel1'].sum()))
+            prev_short_weights_vw = dict(zip(short_portfolio['permno'], 
+                                            short_portfolio['mvel1'] / short_portfolio['mvel1'].sum()))
+        
+        # Update previous stocks
+        prev_long_stocks = curr_long_stocks
+        prev_short_stocks = curr_short_stocks
+        
+        # Calculate gross returns
+        ret_ew_gross = long_portfolio['actual'].mean() - short_portfolio['actual'].mean()
         
         # Value-weighted returns
         long_weights = long_portfolio['mvel1'] / long_portfolio['mvel1'].sum()
@@ -121,9 +192,18 @@ def calculate_portfolio_metrics(predictions_df):
         
         ret_long_vw = (long_portfolio['actual'] * long_weights).sum()
         ret_short_vw = (short_portfolio['actual'] * short_weights).sum()
-        ret_vw = ret_long_vw - ret_short_vw
+        ret_vw_gross = ret_long_vw - ret_short_vw
         
-        monthly_returns_vw.append(ret_vw)
+        # Apply transaction costs (one-way cost * turnover for long-short portfolio)
+        # For long-short, we pay costs on both sides
+        tc_ew = TRANSACTION_COST * turnover_ew[-1] * 2  # 2x for long and short
+        tc_vw = TRANSACTION_COST * turnover_vw[-1] * 2
+        
+        ret_ew_net = ret_ew_gross - tc_ew
+        ret_vw_net = ret_vw_gross - tc_vw
+        
+        monthly_returns_ew.append(ret_ew_net)
+        monthly_returns_vw.append(ret_vw_net)
     
     # Calculate metrics
     returns_ew = np.array(monthly_returns_ew)
@@ -274,6 +354,12 @@ def plot_return_distribution(all_results):
 def main():
     """Main evaluation pipeline."""
     logger.info("="*80)
+    logger.info("⚠️  WARNING: SYNTHETIC DATA EVALUATION ⚠️")
+    logger.info("="*80)
+    logger.info("\n🚨 IMPORTANT: Results use SYNTHETIC returns, NOT real CRSP data 🚨")
+    logger.info("Performance metrics will be INFLATED and UNREALISTIC")
+    logger.info("For real research, use actual CRSP returns from WRDS\n")
+    logger.info("="*80)
     logger.info("UNIFIED MODEL EVALUATION")
     logger.info(f"Start time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("="*80)
@@ -346,6 +432,11 @@ def main():
                f"(Sharpe: {best_model_ew[1]['sharpe_ew']:.2f})")
     logger.info(f"Best Model (Value-Weighted): {best_model_vw[0]} "
                f"(Sharpe: {best_model_vw[1]['sharpe_vw']:.2f})")
+    logger.info("\n⚠️  REMINDER: These results use SYNTHETIC data")
+    logger.info("Real CRSP data would show:")
+    logger.info("  - OOS R²: 0.3-0.5% (not the values above)")
+    logger.info("  - Sharpe ratios: 1.5-2.5 (not 3-8+)")
+    logger.info("  - Many losing months (not mostly winning)")
     logger.info("="*80)
 
 

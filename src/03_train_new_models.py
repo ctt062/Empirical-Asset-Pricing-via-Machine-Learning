@@ -42,8 +42,8 @@ def load_data():
     """Load training and test data."""
     logger.info("Loading data...")
     
-    train_data = pd.read_parquet('data/processed/train_data.parquet')
-    test_data = pd.read_parquet('data/processed/test_data.parquet')
+    train_data = pd.read_parquet('data/train_data.parquet')
+    test_data = pd.read_parquet('data/test_data.parquet')
     
     logger.info(f"Train: {len(train_data):,} samples")
     logger.info(f"Test: {len(test_data):,} samples")
@@ -61,6 +61,10 @@ def train_elastic_net(train_data, test_data):
     logger.info("="*80)
     logger.info("TRAINING ELASTIC NET MODEL")
     logger.info("="*80)
+    
+    # Reset index to access date as column
+    train_data = train_data.reset_index()
+    test_data = test_data.reset_index()
     
     # Get unique test dates
     test_dates = sorted(test_data['date'].unique())
@@ -122,8 +126,9 @@ def train_elastic_net(train_data, test_data):
     predictions_df = pd.concat(all_predictions, ignore_index=True)
     
     # Save predictions
-    output_path = 'results/predictions/elastic_net_predictions.csv'
-    predictions_df.to_csv(output_path, index=False)
+    os.makedirs('results/predictions', exist_ok=True)
+    output_path = 'results/predictions/elastic_net_predictions.parquet'
+    predictions_df.to_parquet(output_path, index=False)
     logger.info(f"Saved predictions to {output_path}")
     
     # Calculate overall OOS R²
@@ -146,6 +151,10 @@ def train_fama_french(train_data, test_data):
     logger.info("="*80)
     logger.info("TRAINING FAMA-FRENCH 3-FACTOR MODEL")
     logger.info("="*80)
+    
+    # Reset index to access date as column
+    train_data = train_data.reset_index()
+    test_data = test_data.reset_index()
     
     # Get unique test dates
     test_dates = sorted(test_data['date'].unique())
@@ -200,8 +209,9 @@ def train_fama_french(train_data, test_data):
     predictions_df = pd.concat(all_predictions, ignore_index=True)
     
     # Save predictions
-    output_path = 'results/predictions/fama_french_predictions.csv'
-    predictions_df.to_csv(output_path, index=False)
+    os.makedirs('results/predictions', exist_ok=True)
+    output_path = 'results/predictions/fama_french_predictions.parquet'
+    predictions_df.to_parquet(output_path, index=False)
     logger.info(f"Saved predictions to {output_path}")
     
     # Calculate overall OOS R²
@@ -226,10 +236,17 @@ def main():
     train_data, test_data = load_data()
     
     # Train Elastic Net
-    logger.info("\n" + "="*80)
-    logger.info("STEP 1: ELASTIC NET")
-    logger.info("="*80)
-    elastic_net_preds = train_elastic_net(train_data, test_data)
+    elastic_net_path = 'results/predictions/elastic_net_predictions.parquet'
+    if os.path.exists(elastic_net_path):
+        logger.info("\n" + "="*80)
+        logger.info("STEP 1: ELASTIC NET (SKIPPING - predictions already exist)")
+        logger.info("="*80)
+        logger.info(f"Found existing predictions at: {elastic_net_path}")
+    else:
+        logger.info("\n" + "="*80)
+        logger.info("STEP 1: ELASTIC NET")
+        logger.info("="*80)
+        elastic_net_preds = train_elastic_net(train_data, test_data)
     
     # Train Fama-French
     logger.info("\n" + "="*80)
@@ -243,8 +260,8 @@ def main():
     logger.info("="*80)
     logger.info(f"End time: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info("\nPredictions saved:")
-    logger.info("  - results/predictions/elastic_net_predictions.csv")
-    logger.info("  - results/predictions/fama_french_predictions.csv")
+    logger.info("  - results/predictions/elastic_net_predictions.parquet")
+    logger.info("  - results/predictions/fama_french_predictions.parquet")
     logger.info("\nNote: GBRT and OLS-3 predictions already exist (not retrained)")
     logger.info("\nNext steps:")
     logger.info("  1. Run: python src/06_unified_evaluation.py")
