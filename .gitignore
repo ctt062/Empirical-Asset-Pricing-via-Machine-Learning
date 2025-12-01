@@ -35,14 +35,16 @@ venv.bak/
 *.ipynb_checkpoints/
 
 # Data files (too large for git)
-data/datashare.csv
-data/datashare.zip
-data/*.parquet
-data/*.pickle
-data/*.pkl
+data/raw/datashare.csv
+data/raw/datashare.zip
+data/raw/datashare_with_returns.csv
+data/processed/*.parquet
+data/processed/*.pickle
+data/processed/*.pkl
 
 # Results (regenerated)
 results/predictions/*.parquet
+results/predictions/*.csv
 results/models/*.txt
 results/models/*.pkl
 
@@ -67,4 +69,3 @@ Thumbs.db
 *.temp
 temp/
 tmp/
-data/datashare_with_returns.csv

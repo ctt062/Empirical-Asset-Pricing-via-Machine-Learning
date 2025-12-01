@@ -111,7 +111,7 @@ def calculate_portfolio_metrics(predictions_df):
     Accounts for transaction costs based on portfolio turnover.
     """
     # Load market cap data for value-weighting
-    test_data = pd.read_parquet('data/test_data.parquet').reset_index()
+    test_data = pd.read_parquet('data/processed/test_data.parquet').reset_index()
     mktcap_data = test_data[['date', 'permno', 'mvel1']].copy()
     
     # Merge with predictions

@@ -41,9 +41,14 @@ def main():
     logger.info("RUNNING ALL MODEL-SPECIFIC ANALYSES")
     logger.info("="*80)
     
+    # Get the project root directory (parent of scripts/)
+    script_dir = Path(__file__).parent
+    project_root = script_dir.parent
+    
     # 1. GBRT Analysis
     logger.info("\n1. Running GBRT detailed analysis...")
-    result = subprocess.run(['python3', 'src/10_gbrt_analysis.py'], capture_output=True, text=True)
+    result = subprocess.run(['python3', str(script_dir / 'analyze_gbrt.py')], 
+                          capture_output=True, text=True, cwd=project_root)
     if result.returncode == 0:
         logger.info("✅ GBRT analysis completed")
     else:
@@ -51,7 +56,8 @@ def main():
     
     # 2. Elastic Net Analysis
     logger.info("\n2. Running Elastic Net detailed analysis...")
-    result = subprocess.run(['python3', 'src/07_elastic_net_analysis.py'], capture_output=True, text=True)
+    result = subprocess.run(['python3', str(script_dir / 'analyze_elastic_net.py')], 
+                          capture_output=True, text=True, cwd=project_root)
     if result.returncode == 0:
         logger.info("✅ Elastic Net analysis completed")
     else:
@@ -59,7 +65,8 @@ def main():
     
     # 3. Fama-French Analysis  
     logger.info("\n3. Running Fama-French detailed analysis...")
-    result = subprocess.run(['python3', 'src/08_fama_french_analysis.py'], capture_output=True, text=True)
+    result = subprocess.run(['python3', str(script_dir / 'analyze_fama_french.py')], 
+                          capture_output=True, text=True, cwd=project_root)
     if result.returncode == 0:
         logger.info("✅ Fama-French analysis completed")
     else:
@@ -67,7 +74,8 @@ def main():
     
     # 4. Unified Evaluation (already creates model_comparison folder)
     logger.info("\n4. Running unified evaluation...")
-    result = subprocess.run(['python3', 'src/06_unified_evaluation.py'], capture_output=True, text=True)
+    result = subprocess.run(['python3', str(project_root / 'src' / '06_unified_evaluation.py')], 
+                          capture_output=True, text=True, cwd=project_root)
     if result.returncode == 0:
         logger.info("✅ Unified evaluation completed")
     else:

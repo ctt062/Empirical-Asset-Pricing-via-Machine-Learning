@@ -1,13 +1,17 @@
 """
-Fama-French 3-Factor Model
+Fama-French 3-Factor Model (Characteristic-Based)
 
-Implementation of the Fama-French (1993) 3-factor model:
-    E[R_i - R_f] = alpha + beta_MKT * (R_m - R_f) + beta_SMB * SMB + beta_HML * HML
+Implementation of a characteristic-based Fama-French style model.
+Instead of estimating factor loadings (which requires long time series),
+this version directly uses size and value characteristics to predict returns.
 
-Where:
-- MKT (Market): Excess return on the market portfolio
-- SMB (Small Minus Big): Size factor (small cap - large cap)
-- HML (High Minus Low): Value factor (high B/M - low B/M)
+This approach:
+1. Ranks stocks by size (small outperforms) and value (high B/M outperforms)
+2. Combines rankings into a composite score
+3. Predicts higher returns for small-cap value stocks
+
+This is more practical for cross-sectional prediction and aligns with the
+economic intuition behind the Fama-French factors.
 """
 
 import logging
@@ -22,199 +26,124 @@ logger = logging.getLogger(__name__)
 
 class FamaFrenchModel(AssetPricingModel):
     """
-    Fama-French 3-Factor Model
+    Fama-French Characteristic-Based Model
     
-    Estimates factor loadings (betas) using rolling historical returns,
-    then predicts returns based on expected factor premia.
+    Uses size (market cap) and value (book-to-market) characteristics
+    directly to predict returns, based on the empirical regularities
+    that small-cap and value stocks tend to outperform.
+    
+    This is a simpler but more robust approach than estimating factor
+    loadings, especially for cross-sectional prediction.
     """
     
     def __init__(self, lookback_months: int = 60, **kwargs):
         """
-        Initialize Fama-French 3-Factor model.
+        Initialize Fama-French model.
         
         Args:
             lookback_months: Number of months for estimating factor loadings (default: 60)
         """
         super().__init__("Fama-French-3F", lookback_months=lookback_months, **kwargs)
         self.lookback_months = lookback_months
-        self.factor_loadings = {}  # Store betas for each stock
-        self.factor_premia = None  # Expected factor returns
+        self.size_premium = None  # Estimated size premium
+        self.value_premium = None  # Estimated value premium
+        self.momentum_premium = None  # Estimated momentum premium
         
-    def construct_factors(self, data: pd.DataFrame) -> pd.DataFrame:
+    def estimate_factor_premia(self, data: pd.DataFrame) -> Dict[str, float]:
         """
-        Construct Fama-French factors from cross-section of stocks.
+        Estimate factor premia from historical data using portfolio sorts.
         
         Args:
             data: DataFrame with columns [date, permno, ret_exc, mvel1, bm]
             
         Returns:
-            DataFrame with factors [MKT, SMB, HML] by date
+            Dictionary with SMB and HML premia
         """
-        logger.info("Constructing Fama-French factors...")
+        logger.info("Estimating factor premia from historical returns...")
         
-        factors_list = []
+        smb_returns = []
+        hml_returns = []
         
         for date in data['date'].unique():
             month_data = data[data['date'] == date].copy()
             
-            if len(month_data) < 10:  # Need minimum stocks
+            if len(month_data) < 20:  # Need minimum stocks
                 continue
             
-            # MKT: Equal-weighted market excess return
-            mkt = month_data['ret_exc'].mean()
-            if pd.isna(mkt):
-                mkt = 0.0
-            
-            # Size breakpoint: Median market cap
+            # Size factor: Small - Big
             size_median = month_data['mvel1'].median()
+            small_ret = month_data[month_data['mvel1'] <= size_median]['ret_exc'].mean()
+            big_ret = month_data[month_data['mvel1'] > size_median]['ret_exc'].mean()
             
-            # B/M breakpoints: 30th and 70th percentiles
-            bm_30 = month_data['bm'].quantile(0.30)
-            bm_70 = month_data['bm'].quantile(0.70)
+            if not pd.isna(small_ret) and not pd.isna(big_ret):
+                smb_returns.append(small_ret - big_ret)
             
-            # Classify stocks
-            month_data['size_group'] = np.where(month_data['mvel1'] <= size_median, 'S', 'B')
+            # Value factor: High B/M - Low B/M
+            bm_median = month_data['bm'].median()
+            high_bm_ret = month_data[month_data['bm'] >= bm_median]['ret_exc'].mean()
+            low_bm_ret = month_data[month_data['bm'] < bm_median]['ret_exc'].mean()
             
-            # Handle duplicate bin edges by using conditions instead of pd.cut
-            if bm_30 == bm_70:
-                # If all BM values are similar, use median split
-                bm_median = month_data['bm'].median()
-                month_data['bm_group'] = np.where(month_data['bm'] <= bm_median, 'L', 'H')
-            else:
-                # Normal case with three groups
-                month_data['bm_group'] = pd.cut(month_data['bm'], 
-                                               bins=[-np.inf, bm_30, bm_70, np.inf],
-                                               labels=['L', 'M', 'H'],
-                                               duplicates='drop')
-            
-            # Calculate portfolio returns
-            portfolios = month_data.groupby(['size_group', 'bm_group'])['ret_exc'].mean()
-            
-            # SMB: Average(Small portfolios) - Average(Big portfolios)
-            try:
-                small_avg = portfolios.loc['S'].mean()
-                big_avg = portfolios.loc['B'].mean()
-                smb = small_avg - big_avg
-                if pd.isna(smb):
-                    smb = 0.0
-            except:
-                smb = 0.0
-            
-            # HML: Average(High B/M) - Average(Low B/M)
-            try:
-                high_avg = month_data[month_data['bm_group'] == 'H']['ret_exc'].mean()
-                low_avg = month_data[month_data['bm_group'] == 'L']['ret_exc'].mean()
-                hml = high_avg - low_avg
-                if pd.isna(hml):
-                    hml = 0.0
-            except:
-                hml = 0.0
-            
-            factors_list.append({
-                'date': date,
-                'MKT': mkt,
-                'SMB': smb,
-                'HML': hml
-            })
+            if not pd.isna(high_bm_ret) and not pd.isna(low_bm_ret):
+                hml_returns.append(high_bm_ret - low_bm_ret)
         
-        factors_df = pd.DataFrame(factors_list)
-        logger.info(f"Constructed factors for {len(factors_df)} periods")
+        smb_premium = np.mean(smb_returns) if smb_returns else 0.002
+        hml_premium = np.mean(hml_returns) if hml_returns else 0.002
         
-        return factors_df
-    
-    def estimate_factor_loadings(self, returns: pd.Series, factors: pd.DataFrame) -> Dict[str, float]:
-        """
-        Estimate factor loadings (betas) for a single stock using OLS.
+        logger.info(f"Estimated SMB premium: {smb_premium*100:.3f}% monthly")
+        logger.info(f"Estimated HML premium: {hml_premium*100:.3f}% monthly")
         
-        Args:
-            returns: Historical returns for the stock
-            factors: Factor returns (MKT, SMB, HML)
-            
-        Returns:
-            Dictionary with beta_MKT, beta_SMB, beta_HML, alpha
-        """
-        # Align returns and factors
-        merged = pd.merge(
-            returns.reset_index(),
-            factors,
-            on='date',
-            how='inner'
-        )
-        
-        if len(merged) < 24:  # Need at least 24 months
-            return {'beta_MKT': 1.0, 'beta_SMB': 0.0, 'beta_HML': 0.0, 'alpha': 0.0}
-        
-        # Prepare X (factors) and y (returns)
-        # Drop rows with NaN values
-        merged_clean = merged[['MKT', 'SMB', 'HML', 'ret_exc']].dropna()
-        
-        if len(merged_clean) < 24:  # Need at least 24 months after cleaning
-            return {'beta_MKT': 1.0, 'beta_SMB': 0.0, 'beta_HML': 0.0, 'alpha': 0.0}
-        
-        X = merged_clean[['MKT', 'SMB', 'HML']].values
-        y = merged_clean['ret_exc'].values
-        
-        # OLS regression
-        model = LinearRegression()
-        model.fit(X, y)
-        
-        return {
-            'beta_MKT': model.coef_[0],
-            'beta_SMB': model.coef_[1],
-            'beta_HML': model.coef_[2],
-            'alpha': model.intercept_
-        }
+        return {'SMB': smb_premium, 'HML': hml_premium}
     
     def train(self, X_train: pd.DataFrame, y_train: pd.Series) -> None:
         """
-        Train Fama-French model by estimating factor loadings.
+        Train Fama-French model by estimating factor premia.
         
         Args:
             X_train: Features including [date, permno, mvel1, bm]
             y_train: Excess returns
         """
-        logger.info("Training Fama-French 3-Factor model...")
+        logger.info("Training Fama-French Characteristic-Based model...")
         
         # Combine features and target
         train_data = X_train.copy()
-        train_data['ret_exc'] = y_train
+        train_data['ret_exc'] = y_train.values
         
-        # Construct factors
-        self.factors = self.construct_factors(train_data)
+        # Estimate factor premia from historical data
+        premia = self.estimate_factor_premia(train_data)
+        self.size_premium = premia['SMB']
+        self.value_premium = premia['HML']
         
-        # Estimate expected factor premia (historical average)
-        self.factor_premia = {
-            'MKT': self.factors['MKT'].mean(),
-            'SMB': self.factors['SMB'].mean(),
-            'HML': self.factors['HML'].mean()
-        }
-        
-        logger.info(f"Factor premia - MKT: {self.factor_premia['MKT']:.4f}, "
-                   f"SMB: {self.factor_premia['SMB']:.4f}, "
-                   f"HML: {self.factor_premia['HML']:.4f}")
-        
-        # Estimate factor loadings for each stock
-        unique_stocks = train_data['permno'].unique()
-        logger.info(f"Estimating factor loadings for {len(unique_stocks)} stocks...")
-        
-        for permno in unique_stocks:
-            stock_data = train_data[train_data['permno'] == permno]
-            returns = stock_data.set_index('date')['ret_exc']
-            
-            loadings = self.estimate_factor_loadings(returns, self.factors)
-            self.factor_loadings[permno] = loadings
+        # Also estimate momentum premium if available
+        if 'mom12m' in X_train.columns:
+            mom_returns = []
+            for date in train_data['date'].unique():
+                month_data = train_data[train_data['date'] == date].copy()
+                if len(month_data) < 20:
+                    continue
+                mom_median = month_data['mom12m'].median()
+                high_mom = month_data[month_data['mom12m'] >= mom_median]['ret_exc'].mean()
+                low_mom = month_data[month_data['mom12m'] < mom_median]['ret_exc'].mean()
+                if not pd.isna(high_mom) and not pd.isna(low_mom):
+                    mom_returns.append(high_mom - low_mom)
+            self.momentum_premium = np.mean(mom_returns) if mom_returns else 0.005
+            logger.info(f"Estimated momentum premium: {self.momentum_premium*100:.3f}% monthly")
+        else:
+            self.momentum_premium = 0.005  # Default momentum premium
         
         self.is_trained = True
         logger.info("Fama-French model training completed")
     
     def predict(self, X_test: pd.DataFrame) -> np.ndarray:
         """
-        Predict returns using Fama-French factor model.
+        Predict returns using characteristic-based Fama-French approach.
         
-        Expected return = alpha + beta_MKT * E[MKT] + beta_SMB * E[SMB] + beta_HML * E[HML]
+        Stocks are ranked by:
+        1. Size (smaller = higher expected return)
+        2. Value (higher B/M = higher expected return)
+        3. Momentum (higher past returns = higher expected return)
         
         Args:
-            X_test: Test features with [permno]
+            X_test: Test features with [permno, mvel1, bm]
             
         Returns:
             Array of predicted returns
@@ -222,43 +151,61 @@ class FamaFrenchModel(AssetPricingModel):
         if not self.is_trained:
             raise ValueError("Model must be trained before prediction")
         
-        predictions = []
+        predictions = np.zeros(len(X_test))
         
-        for idx, row in X_test.iterrows():
-            permno = row['permno']
-            
-            # Get factor loadings (use market beta of 1.0 if not available)
-            if permno in self.factor_loadings:
-                loadings = self.factor_loadings[permno]
-            else:
-                loadings = {'beta_MKT': 1.0, 'beta_SMB': 0.0, 'beta_HML': 0.0, 'alpha': 0.0}
-            
-            # Predict return using factor model
-            pred = (loadings['alpha'] +
-                   loadings['beta_MKT'] * self.factor_premia['MKT'] +
-                   loadings['beta_SMB'] * self.factor_premia['SMB'] +
-                   loadings['beta_HML'] * self.factor_premia['HML'])
-            
-            predictions.append(pred)
+        # Rank by size (small = high rank = higher predicted return)
+        if 'mvel1' in X_test.columns:
+            size_vals = X_test['mvel1'].values.astype(float)
+            # Normalize and invert (smaller = higher score)
+            size_norm = (size_vals - np.nanmean(size_vals)) / (np.nanstd(size_vals) + 1e-10)
+            size_score = -size_norm  # Negative because small is good
+            predictions += size_score * abs(self.size_premium) * 3  # Scale factor
         
-        return np.array(predictions)
+        # Rank by value (high B/M = high rank = higher predicted return)
+        if 'bm' in X_test.columns:
+            bm_vals = X_test['bm'].values.astype(float)
+            bm_norm = (bm_vals - np.nanmean(bm_vals)) / (np.nanstd(bm_vals) + 1e-10)
+            predictions += bm_norm * abs(self.value_premium) * 3  # Scale factor
+        
+        # Rank by momentum (high momentum = higher predicted return)
+        if 'mom12m' in X_test.columns:
+            mom_vals = X_test['mom12m'].values.astype(float)
+            mom_norm = (mom_vals - np.nanmean(mom_vals)) / (np.nanstd(mom_vals) + 1e-10)
+            predictions += mom_norm * abs(self.momentum_premium) * 2  # Scale factor
+        
+        # Handle NaN values
+        predictions = np.nan_to_num(predictions, nan=0.0)
+        
+        return predictions
     
     def get_model_info(self) -> Dict[str, Any]:
         """Return model metadata."""
         return {
             'model_name': self.model_name,
             'lookback_months': self.lookback_months,
-            'n_stocks': len(self.factor_loadings),
-            'factor_premia': self.factor_premia,
+            'size_premium': self.size_premium,
+            'value_premium': self.value_premium,
+            'momentum_premium': self.momentum_premium,
             'is_trained': self.is_trained
         }
     
     def get_factor_summary(self) -> pd.DataFrame:
-        """Get summary statistics of factor loadings across all stocks."""
-        if not self.factor_loadings:
+        """Get summary of estimated factor premia."""
+        if not self.is_trained:
             return pd.DataFrame()
         
-        loadings_df = pd.DataFrame(self.factor_loadings).T
-        summary = loadings_df.describe()
+        summary = pd.DataFrame({
+            'Factor': ['SMB (Size)', 'HML (Value)', 'MOM (Momentum)'],
+            'Monthly Premium (%)': [
+                self.size_premium * 100 if self.size_premium else 0,
+                self.value_premium * 100 if self.value_premium else 0,
+                self.momentum_premium * 100 if self.momentum_premium else 0
+            ],
+            'Annualized Premium (%)': [
+                self.size_premium * 12 * 100 if self.size_premium else 0,
+                self.value_premium * 12 * 100 if self.value_premium else 0,
+                self.momentum_premium * 12 * 100 if self.momentum_premium else 0
+            ]
+        })
         
         return summary

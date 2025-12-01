@@ -74,7 +74,7 @@ solution_text = '''IMPLEMENTATION:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 ✅ Created:
-   src/01a_add_synthetic_returns.py
+   scripts/add_synthetic_returns.py
    • Generates realistic ret_exc
    • Mean: 0.5%, Std: 6%
    • Based on factors:

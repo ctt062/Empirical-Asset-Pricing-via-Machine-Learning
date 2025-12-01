@@ -38,7 +38,7 @@ from utils import (
     create_performance_table
 )
 from config import (
-    DATA_DIR,
+    DATA_PROCESSED_DIR,
     RESULTS_DIR,
     TRANSACTION_COST,
     N_PORTFOLIOS
@@ -397,7 +397,7 @@ def main() -> None:
     
     # Load test data
     logger.info("Loading test data...")
-    test_df = pd.read_parquet(DATA_DIR / "test_data.parquet")
+    test_df = pd.read_parquet(DATA_PROCESSED_DIR / "test_data.parquet")
     
     # Load predictions
     try:

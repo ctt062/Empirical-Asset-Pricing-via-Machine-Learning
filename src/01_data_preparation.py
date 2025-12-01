@@ -30,6 +30,8 @@ from utils import (
 )
 from config import (
     DATA_DIR,
+    DATA_RAW_DIR,
+    DATA_PROCESSED_DIR,
     RESULTS_DIR,
     TRAIN_END_DATE,
     TEST_START_DATE,
@@ -37,7 +39,7 @@ from config import (
 )
 
 # Use datashare_with_returns.csv which includes synthetic returns
-CSV_FILE = DATA_DIR / "datashare_with_returns.csv"
+CSV_FILE = DATA_RAW_DIR / "datashare_with_returns.csv"
 
 logger = setup_logging()
 
@@ -350,11 +352,11 @@ def save_processed_data(train_df: pd.DataFrame, test_df: pd.DataFrame,
     """
     logger.info("Saving processed data")
     
-    ensure_dir(DATA_DIR)
+    ensure_dir(DATA_PROCESSED_DIR)
     
     # Save dataframes
-    train_path = DATA_DIR / "train_data.parquet"
-    test_path = DATA_DIR / "test_data.parquet"
+    train_path = DATA_PROCESSED_DIR / "train_data.parquet"
+    test_path = DATA_PROCESSED_DIR / "test_data.parquet"
     
     train_df.to_parquet(train_path, compression='snappy')
     test_df.to_parquet(test_path, compression='snappy')
@@ -380,7 +382,7 @@ def save_processed_data(train_df: pd.DataFrame, test_df: pd.DataFrame,
     }
     
     import json
-    metadata_path = DATA_DIR / "data_metadata.json"
+    metadata_path = DATA_PROCESSED_DIR / "data_metadata.json"
     with open(metadata_path, 'w') as f:
         json.dump(metadata, f, indent=2)
     

@@ -23,11 +23,13 @@ from tqdm import tqdm
 sys.path.append(str(Path(__file__).parent))
 from utils import setup_logging, ensure_dir, get_project_root
 
+# Import configuration
+from config import DATA_DIR, DATA_RAW_DIR
+
 # Configuration
 DATA_URL = "https://dachxiu.chicagobooth.edu/download/datashare.zip"
-DATA_DIR = get_project_root() / "data"
-ZIP_FILE = DATA_DIR / "datashare.zip"
-CSV_FILE = DATA_DIR / "datashare.csv"
+ZIP_FILE = DATA_RAW_DIR / "datashare.zip"
+CSV_FILE = DATA_RAW_DIR / "datashare.csv"
 
 logger = setup_logging()
 
@@ -172,8 +174,8 @@ def main() -> None:
             verify_csv(CSV_FILE)
             return
     
-    # Create data directory
-    ensure_dir(DATA_DIR)
+    # Create data directories
+    ensure_dir(DATA_RAW_DIR)
     
     # Download zip file
     if not ZIP_FILE.exists():
@@ -187,7 +189,7 @@ def main() -> None:
     
     # Extract CSV
     try:
-        extract_zip(ZIP_FILE, DATA_DIR, target_file="datashare.csv")
+        extract_zip(ZIP_FILE, DATA_RAW_DIR, target_file="datashare.csv")
     except Exception as e:
         logger.error(f"Failed to extract data: {e}")
         sys.exit(1)

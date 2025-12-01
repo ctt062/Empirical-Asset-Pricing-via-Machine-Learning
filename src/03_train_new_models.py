@@ -42,8 +42,8 @@ def load_data():
     """Load training and test data."""
     logger.info("Loading data...")
     
-    train_data = pd.read_parquet('data/train_data.parquet')
-    test_data = pd.read_parquet('data/test_data.parquet')
+    train_data = pd.read_parquet('data/processed/train_data.parquet')
+    test_data = pd.read_parquet('data/processed/test_data.parquet')
     
     logger.info(f"Train: {len(train_data):,} samples")
     logger.info(f"Test: {len(test_data):,} samples")
@@ -91,13 +91,14 @@ def train_elastic_net(train_data, test_data):
         y_train = train_window['ret_exc']
         X_test = test_window[feature_cols]
         
-        # Initialize and train model
+        # Initialize and train model with optimized hyperparameters
         model = ElasticNetModel(
-            l1_ratio=0.5,
+            l1_ratio=0.5,  # Will try multiple l1_ratios in CV
             use_cv=True,
-            n_alphas=50,
-            cv_folds=3,
-            max_iter=5000
+            n_alphas=100,
+            cv_folds=5,
+            max_iter=10000,
+            eps=1e-3  # Allow less regularization
         )
         
         logger.info(f"[{i}/{len(test_dates)}] Training on {len(train_window):,} samples, "
@@ -160,25 +161,33 @@ def train_fama_french(train_data, test_data):
     test_dates = sorted(test_data['date'].unique())
     logger.info(f"Predicting {len(test_dates)} months from {test_dates[0]} to {test_dates[-1]}")
     
-    # Need columns: date, permno, ret_exc, mvel1, bm
+    # Need columns: date, permno, ret_exc, mvel1, bm, and optionally mom12m
     required_cols = ['date', 'permno', 'ret_exc', 'mvel1', 'bm']
+    optional_cols = ['mom12m']  # Momentum for better prediction
+    
+    # Check which optional columns exist
+    available_cols = required_cols.copy()
+    for col in optional_cols:
+        if col in train_data.columns:
+            available_cols.append(col)
     
     all_predictions = []
     
     # Expanding window training
     for i, test_date in enumerate(test_dates, 1):
         # Training data: all months before test_date
-        train_window = train_data[train_data['date'] < test_date][required_cols].copy()
-        test_window = test_data[test_data['date'] == test_date][required_cols].copy()
+        train_window = train_data[train_data['date'] < test_date][available_cols].copy()
+        test_window = test_data[test_data['date'] == test_date][available_cols].copy()
         
         if len(train_window) < 10000:
             logger.warning(f"Skipping {test_date}: insufficient training data")
             continue
         
         # Prepare features and target
-        X_train = train_window[['date', 'permno', 'mvel1', 'bm']]
+        feature_cols = [c for c in available_cols if c not in ['ret_exc']]
+        X_train = train_window[feature_cols]
         y_train = train_window['ret_exc']
-        X_test = test_window[['date', 'permno', 'mvel1', 'bm']]
+        X_test = test_window[feature_cols]
         
         # Initialize and train model
         model = FamaFrenchModel(lookback_months=60)

@@ -34,28 +34,29 @@ from utils import (
     RANDOM_STATE
 )
 
-# Configuration
-DATA_DIR = get_project_root() / "data"
-RESULTS_DIR = get_project_root() / "results"
+# Import configuration
+from config import DATA_PROCESSED_DIR, RESULTS_DIR
 MODELS_DIR = RESULTS_DIR / "models"
 
-# LightGBM hyperparameters (following best practices from paper)
+# LightGBM hyperparameters (optimized for stronger predictions)
 DEFAULT_PARAMS = {
     'objective': 'regression',
     'metric': 'mse',
     'boosting_type': 'gbdt',
-    'learning_rate': 0.05,
-    'num_leaves': 64,
-    'max_depth': 6,
-    'min_child_samples': 50,
-    'subsample': 0.8,
+    'learning_rate': 0.03,  # Slower learning for better generalization
+    'num_leaves': 32,  # Reduced to prevent overfitting
+    'max_depth': 5,  # Shallower trees
+    'min_child_samples': 100,  # More samples per leaf
+    'subsample': 0.7,  # More aggressive subsampling
     'subsample_freq': 1,
-    'colsample_bytree': 0.8,
-    'reg_alpha': 0.1,
-    'reg_lambda': 0.1,
+    'colsample_bytree': 0.7,  # Feature subsampling
+    'reg_alpha': 0.5,  # L1 regularization
+    'reg_lambda': 0.5,  # L2 regularization
+    'min_split_gain': 0.01,  # Minimum gain to split
     'random_state': RANDOM_STATE,
     'verbose': -1,
-    'n_jobs': -1
+    'n_jobs': -1,
+    'force_col_wise': True  # Better for wide datasets
 }
 
 logger = setup_logging()
@@ -88,13 +89,13 @@ def tune_hyperparameters(X_train: np.ndarray, y_train: np.ndarray,
     """
     logger.info("Tuning hyperparameters with time-series CV")
     
-    # Parameter grid (simplified for computational efficiency)
+    # Parameter grid (optimized for better generalization)
     param_grid = {
-        'learning_rate': [0.01, 0.05],
-        'num_leaves': [64, 128],
-        'max_depth': [6, 8],
-        'subsample': [0.8],
-        'colsample_bytree': [0.8],
+        'learning_rate': [0.01, 0.03, 0.05],
+        'num_leaves': [16, 32, 64],
+        'max_depth': [4, 5, 6],
+        'subsample': [0.6, 0.7, 0.8],
+        'colsample_bytree': [0.6, 0.7, 0.8],
     }
     
     best_score = float('inf')
@@ -419,12 +420,12 @@ def main() -> None:
     
     # Load preprocessed data
     logger.info("Loading preprocessed data...")
-    train_df = pd.read_parquet(DATA_DIR / "train_data.parquet")
-    test_df = pd.read_parquet(DATA_DIR / "test_data.parquet")
+    train_df = pd.read_parquet(DATA_PROCESSED_DIR / "train_data.parquet")
+    test_df = pd.read_parquet(DATA_PROCESSED_DIR / "test_data.parquet")
     
     # Load metadata
     import json
-    with open(DATA_DIR / "data_metadata.json", 'r') as f:
+    with open(DATA_PROCESSED_DIR / "data_metadata.json", 'r') as f:
         metadata = json.load(f)
     
     target_col = metadata['target_col']

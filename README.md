@@ -94,51 +94,53 @@ python run_all.py
 
 ```
 Empirical-Asset-Pricing-via-Machine-Learning/
-├── data/                          # Data directory
-│   ├── raw/                      # Raw data files
-│   │   └── datashare.csv         # Gu-Kelly-Xiu dataset
-│   └── processed/                # Preprocessed data
-│       ├── train_data.parquet    # Training data
-│       └── test_data.parquet     # Test data
+├── data/                           # Data directory
+│   ├── raw/                        # Raw data files
+│   │   ├── datashare.csv           # Gu-Kelly-Xiu dataset
+│   │   └── datashare_with_returns.csv
+│   └── processed/                  # Preprocessed data
+│       ├── train_data.parquet      # Training data
+│       ├── test_data.parquet       # Test data
+│       └── data_metadata.json      # Dataset metadata
 │
-├── src/                           # Source code
-│   ├── models/                   # Model implementations
-│   │   ├── base_model.py         # Abstract base class
-│   │   ├── fama_french.py        # Fama-French 3-Factor
-│   │   ├── elastic_net.py        # Elastic Net
-│   │   └── __init__.py           # Package init
-│   │
-│   ├── evaluation/               # Evaluation modules
-│   │   └── metrics.py            # Performance metrics
-│   │
-│   ├── utils.py                  # Utility functions
-│   ├── 00_download_data.py       # Download dataset
-│   ├── 01_data_preparation.py    # Data preprocessing
-│   ├── 02_baseline_benchmark.py  # OLS-3 benchmark
-│   ├── 03_gbrt_model.py          # GBRT implementation
-│   ├── 03_train_new_models.py    # Train Elastic Net & FF
-│   ├── 04_evaluation.py          # GBRT evaluation
-│   ├── 05_feature_importance.py  # GBRT interpretability
-│   └── 06_unified_evaluation.py  # Compare all 4 models
+├── src/                            # Core source code
+│   ├── config.py                   # Configuration settings
+│   ├── utils.py                    # Utility functions
+│   ├── models/                     # Model implementations
+│   │   ├── base_model.py           # Abstract base class
+│   │   ├── elastic_net.py          # Elastic Net
+│   │   └── fama_french.py          # Fama-French 3-Factor
+│   ├── 00_download_data.py         # Download dataset
+│   ├── 01_data_preparation.py      # Data preprocessing
+│   ├── 02_baseline_benchmark.py    # OLS-3 benchmark
+│   ├── 03_gbrt_model.py            # GBRT implementation
+│   ├── 03_train_new_models.py      # Train Elastic Net & FF
+│   ├── 04_evaluation.py            # Model evaluation
+│   ├── 05_feature_importance.py    # Feature interpretability
+│   └── 06_unified_evaluation.py    # Compare all 4 models
 │
-├── results/                       # Results directory
-│   ├── tables/                   # Performance tables
-│   ├── figures/                  # Publication plots
-│   ├── predictions/              # Model predictions
-│   │   ├── benchmark_predictions.parquet
-│   │   ├── gbrt_predictions.csv
-│   │   ├── elastic_net_predictions.csv
-│   │   └── fama_french_predictions.csv
-│   └── models/                   # Saved models
+├── scripts/                        # Utility scripts
+│   ├── monitor.py                  # Training progress monitor
+│   ├── add_synthetic_returns.py    # Generate synthetic returns
+│   ├── analyze_elastic_net.py      # Elastic Net analysis
+│   ├── analyze_fama_french.py      # Fama-French analysis
+│   ├── analyze_gbrt.py             # GBRT analysis
+│   └── visualize_*.py              # Visualization scripts
 │
-├── notebooks/                     # Jupyter notebooks
-│   └── exploration.ipynb         # Interactive analysis
+├── results/                        # Results directory
+│   ├── tables/                     # Performance tables (CSV, LaTeX)
+│   ├── figures/                    # Publication plots
+│   ├── predictions/                # Model predictions (Parquet)
+│   └── models/                     # Saved models
 │
-├── run_all.py                    # Master pipeline script
-├── requirements.txt              # Python dependencies
-├── environment.yml               # Conda environment
-├── README.md                     # This file
-└── LICENSE                       # MIT License
+├── notebooks/                      # Jupyter notebooks
+│   └── exploration.ipynb           # Interactive analysis
+│
+├── run_all.py                      # Master pipeline script
+├── requirements.txt                # Python dependencies
+├── environment.yml                 # Conda environment
+├── README.md                       # This file
+└── LICENSE                         # MIT License
 ```
 
 ---

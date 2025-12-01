@@ -36,6 +36,7 @@ class ElasticNetModel(AssetPricingModel):
                  n_alphas: int = 100,
                  cv_folds: int = 5,
                  max_iter: int = 10000,
+                 eps: float = 1e-4,
                  **kwargs):
         """
         Initialize Elastic Net model.
@@ -47,6 +48,7 @@ class ElasticNetModel(AssetPricingModel):
             n_alphas: Number of alphas to try in CV
             cv_folds: Number of CV folds
             max_iter: Maximum iterations for convergence
+            eps: Length of the path (smaller = less regularization options)
         """
         super().__init__("Elastic Net", 
                         alpha=alpha, 
@@ -55,6 +57,7 @@ class ElasticNetModel(AssetPricingModel):
                         n_alphas=n_alphas,
                         cv_folds=cv_folds,
                         max_iter=max_iter,
+                        eps=eps,
                         **kwargs)
         
         self.alpha = alpha
@@ -63,6 +66,7 @@ class ElasticNetModel(AssetPricingModel):
         self.n_alphas = n_alphas
         self.cv_folds = cv_folds
         self.max_iter = max_iter
+        self.eps = eps
         
         self.scaler = StandardScaler()
         self.feature_names = None
@@ -97,22 +101,27 @@ class ElasticNetModel(AssetPricingModel):
         # Train model
         if self.use_cv:
             logger.info(f"Using CV with {self.n_alphas} alphas and {self.cv_folds} folds...")
+            # Use multiple l1_ratios to find best mix of L1/L2
+            l1_ratios = [0.1, 0.3, 0.5, 0.7, 0.9] if self.l1_ratio == 0.5 else [self.l1_ratio]
             self.model = ElasticNetCV(
-                l1_ratio=self.l1_ratio,
+                l1_ratio=l1_ratios,
                 n_alphas=self.n_alphas,
                 cv=self.cv_folds,
                 max_iter=self.max_iter,
+                eps=self.eps,  # Controls regularization path
                 random_state=42,
-                n_jobs=-1
+                n_jobs=-1,
+                selection='random'  # Faster convergence
             )
         else:
-            alpha_value = self.alpha if self.alpha is not None else 1.0
+            alpha_value = self.alpha if self.alpha is not None else 0.001  # Lower default alpha
             logger.info(f"Using fixed alpha={alpha_value}")
             self.model = ElasticNet(
                 alpha=alpha_value,
                 l1_ratio=self.l1_ratio,
                 max_iter=self.max_iter,
-                random_state=42
+                random_state=42,
+                selection='random'
             )
         
         # Fit model

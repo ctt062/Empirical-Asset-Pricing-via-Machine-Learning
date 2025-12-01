@@ -37,7 +37,7 @@ def load_predictions():
     pred_df = pd.read_parquet(RESULTS_DIR / 'predictions' / 'elastic_net_predictions.parquet')
     
     # Load test data for characteristics
-    test_df = pd.read_parquet('data/test_data.parquet')
+    test_df = pd.read_parquet('data/processed/test_data.parquet')
     
     # Merge
     merged = pred_df.merge(

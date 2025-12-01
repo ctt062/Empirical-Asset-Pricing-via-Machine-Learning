@@ -35,9 +35,8 @@ warnings.filterwarnings('ignore')
 sys.path.append(str(Path(__file__).parent))
 from utils import setup_logging, ensure_dir, get_project_root
 
-# Configuration
-DATA_DIR = get_project_root() / "data"
-RESULTS_DIR = get_project_root() / "results"
+# Import configuration
+from config import DATA_PROCESSED_DIR, RESULTS_DIR
 MODELS_DIR = RESULTS_DIR / "models"
 
 logger = setup_logging()
@@ -423,11 +422,11 @@ def main() -> None:
     
     # Load data for SHAP analysis
     logger.info("Loading data...")
-    train_df = pd.read_parquet(DATA_DIR / "train_data.parquet")
+    train_df = pd.read_parquet(DATA_PROCESSED_DIR / "train_data.parquet")
     
     # Load metadata
     import json
-    with open(DATA_DIR / "data_metadata.json", 'r') as f:
+    with open(DATA_PROCESSED_DIR / "data_metadata.json", 'r') as f:
         metadata = json.load(f)
     
     feature_cols = metadata['feature_cols']

@@ -40,9 +40,8 @@ from utils import (
     RANDOM_STATE
 )
 
-# Configuration
-DATA_DIR = get_project_root() / "data"
-RESULTS_DIR = get_project_root() / "results"
+# Import configuration
+from config import DATA_PROCESSED_DIR, RESULTS_DIR
 
 logger = setup_logging()
 
@@ -414,12 +413,12 @@ def main() -> None:
     
     # Load preprocessed data
     logger.info("Loading preprocessed data...")
-    train_df = pd.read_parquet(DATA_DIR / "train_data.parquet")
-    test_df = pd.read_parquet(DATA_DIR / "test_data.parquet")
+    train_df = pd.read_parquet(DATA_PROCESSED_DIR / "train_data.parquet")
+    test_df = pd.read_parquet(DATA_PROCESSED_DIR / "test_data.parquet")
     
     # Load metadata
     import json
-    with open(DATA_DIR / "data_metadata.json", 'r') as f:
+    with open(DATA_PROCESSED_DIR / "data_metadata.json", 'r') as f:
         metadata = json.load(f)
     
     target_col = metadata['target_col']

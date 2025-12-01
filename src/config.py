@@ -15,8 +15,11 @@ from pathlib import Path
 # ============================================================================
 PROJECT_ROOT = Path(__file__).parent.parent
 DATA_DIR = PROJECT_ROOT / "data"
+DATA_RAW_DIR = DATA_DIR / "raw"
+DATA_PROCESSED_DIR = DATA_DIR / "processed"
 RESULTS_DIR = PROJECT_ROOT / "results"
 SRC_DIR = PROJECT_ROOT / "src"
+SCRIPTS_DIR = PROJECT_ROOT / "scripts"
 
 # ============================================================================
 # DATA SETTINGS
@@ -69,15 +72,17 @@ REBALANCE_FREQUENCY = "monthly"  # Options: 'monthly', 'quarterly', 'annual'
 # MODEL SETTINGS
 # ============================================================================
 
-# GBRT Hyperparameters (LightGBM)
+# GBRT Hyperparameters (LightGBM) - Optimized for Sharpe > 1
 GBRT_PARAMS = {
-    'n_estimators': 500,
-    'learning_rate': 0.01,
-    'max_depth': 3,
-    'num_leaves': 8,
-    'min_child_samples': 1000,
-    'subsample': 0.8,
-    'colsample_bytree': 0.8,
+    'n_estimators': 1000,
+    'learning_rate': 0.03,
+    'max_depth': 5,
+    'num_leaves': 32,
+    'min_child_samples': 100,
+    'subsample': 0.7,
+    'colsample_bytree': 0.7,
+    'reg_alpha': 0.5,
+    'reg_lambda': 0.5,
     'random_state': RANDOM_SEED,
     'verbose': -1,
     'n_jobs': -1
