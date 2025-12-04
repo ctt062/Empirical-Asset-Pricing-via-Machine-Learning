@@ -18,6 +18,10 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 from pathlib import Path
 import logging
+import sys
+
+# Add src directory to path for project utilities
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from config import TRANSACTION_COST
 
 # Setup

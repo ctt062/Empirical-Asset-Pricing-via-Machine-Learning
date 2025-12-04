@@ -42,7 +42,8 @@ import numpy as np
 import pandas as pd
 from tqdm import tqdm
 
-sys.path.append(str(Path(__file__).parent))
+# Add src directory to path for project utilities
+sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from utils import setup_logging, ensure_dir, get_project_root
 
 DATA_DIR = get_project_root() / "data"
